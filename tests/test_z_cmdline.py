@@ -1,3 +1,4 @@
+import os
 import platform
 
 import py
@@ -454,6 +455,21 @@ def test_sdist_fails(cmd, initproj):
     ])
 
 
+def test_no_setup_py_exits(cmd, initproj):
+    initproj("pkg123-0.7", filedefs={
+        'tox.ini': """
+            [testenv]
+            commands=python -c "2 + 2"
+        """
+    })
+    os.remove("setup.py")
+    result = cmd.run("tox", )
+    assert result.ret
+    result.stdout.fnmatch_lines([
+        "*ERROR*No setup.py file found*"
+    ])
+
+
 def test_package_install_fails(cmd, initproj):
     initproj("pkg123-0.7", filedefs={
         'tests': {'test_hello.py': "def test_hello(): pass"},
@@ -685,6 +701,28 @@ def test_alwayscopy_default(initproj, cmd, mocksession):
         assert "virtualenv --always-copy" not in out
 
 
+def test_empty_activity_ignored(initproj, cmd):
+    initproj("example123", filedefs={'tox.ini': """
+            [testenv]
+            list_dependencies_command=echo
+            commands={envpython} --version
+    """})
+    result = cmd.run("tox")
+    assert not result.ret
+    assert "installed:" not in result.stdout.str()
+
+
+def test_empty_activity_shown_verbose(initproj, cmd):
+    initproj("example123", filedefs={'tox.ini': """
+            [testenv]
+            list_dependencies_command=echo
+            commands={envpython} --version
+    """})
+    result = cmd.run("tox", "-v")
+    assert not result.ret
+    assert "installed:" in result.stdout.str()
+
+
 def test_test_piphelp(initproj, cmd):
     initproj("example123", filedefs={'tox.ini': """
         # content of: tox.ini
@@ -759,9 +797,9 @@ def test_separate_sdist_no_sdistfile(cmd, initproj):
     })
     result = cmd.run("tox", "--sdistonly")
     assert not result.ret
-    l = distshare.listdir()
-    assert len(l) == 1
-    sdistfile = l[0]
+    distshare_files = distshare.listdir()
+    assert len(distshare_files) == 1
+    sdistfile = distshare_files[0]
     assert 'pkg123-foo-0.7.zip' in str(sdistfile)
 
 
@@ -776,9 +814,9 @@ def test_separate_sdist(cmd, initproj):
     })
     result = cmd.run("tox", "--sdistonly")
     assert not result.ret
-    l = distshare.listdir()
-    assert len(l) == 1
-    sdistfile = l[0]
+    sdistfiles = distshare.listdir()
+    assert len(sdistfiles) == 1
+    sdistfile = sdistfiles[0]
     result = cmd.run("tox", "-v", "--notest")
     assert not result.ret
     result.stdout.fnmatch_lines([
