@@ -10,9 +10,12 @@ from tox.hookspecs import hookimpl
 from tox.interpreters import NoInterpreterInfo
 from tox.venv import CreationConfig
 from tox.venv import getdigest
-from tox.venv import tox_testenv_create
 from tox.venv import tox_testenv_install_deps
 from tox.venv import VirtualEnv
+
+
+def tox_testenv_create(action, venv):
+    return venv.hook.tox_testenv_create(action=action, venv=venv)
 
 
 def test_getdigest(tmpdir):
