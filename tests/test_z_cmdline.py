@@ -455,6 +455,7 @@ def test_sdist_fails(cmd, initproj):
     ])
 
 
+@pytest.mark.xfail(strict=True)  # this change is not released yet
 def test_no_setup_py_exits(cmd, initproj):
     initproj("pkg123-0.7", filedefs={
         'tox.ini': """
@@ -701,6 +702,7 @@ def test_alwayscopy_default(initproj, cmd, mocksession):
         assert "virtualenv --always-copy" not in out
 
 
+@pytest.mark.xfail(strict=True)  # this change is not released yet
 def test_empty_activity_ignored(initproj, cmd):
     initproj("example123", filedefs={'tox.ini': """
             [testenv]
