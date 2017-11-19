@@ -1,0 +1,25 @@
+sudo: false
+
+language: python
+
+python:
+  - 2.7
+  - 3.4
+  - 3.5
+  - 3.6
+  - pypy
+
+matrix:
+  fast_finish: true
+  allow_failures:
+  - python: pypy
+  include:
+  - os: osx
+    language: generic
+
+before_install: if [[ "$TRAVIS_OS_NAME" == "osx" ]]; then source .travis-osx; fi
+install:
+  - pip install -U six setuptools wheel
+  - pip install -U tox tox-travis
+  - python setup.py bdist_wheel
+script: tox --installpkg ./dist/tox_venv-*.whl
