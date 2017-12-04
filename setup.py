@@ -14,7 +14,7 @@ setup(
     long_description=get_long_description(),
     author='Ryan P Kilby',
     author_email='rpkilby@ncsu.edu',
-    url='https://github.com/rpkilby/tox-venv',
+    url='https://github.com/tox-dev/tox-venv',
     license='BSD',
     version='0.1.0',
     package_dir={'': 'src'},
