@@ -1,4 +1,5 @@
 import os
+import platform
 import subprocess
 
 from tox.config import hookimpl
@@ -6,26 +7,60 @@ from tox.config import hookimpl
 
 def real_python3(python):
     """
-    use real_prefix to determine if we're running inside a virtualenv,
-    and if so, use it as the base path to determine the real python
-    executable path.
+    Determine the path of the real python executable, which is then used for
+    venv creation. This is necessary, because an active virtualenv environment
+    will cause venv creation to malfunction. By getting the path of the real
+    executable, this issue is bypassed.
+
+    The provided `python` path may be either:
+    - A real python executable
+    - A virtualized python executable (with venv)
+    - A virtualized python executable (with virtualenv)
+
+    If the virtual environment was created with virtualenv, the `sys` module
+    will have a `real_prefix` attribute, which points to the directory where
+    the real python files are installed.
+
+    If `real_prefix` is not present, the environment was not created with
+    virtualenv, and the python executable is safe to use.
     """
     args = [str(python), '-c', 'import sys; print(sys.real_prefix)']
 
+    # get python prefix
     process = subprocess.Popen(args, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
     output, _ = process.communicate()
-    output = output.decode('UTF-8').strip()
-    path = os.path.join(output, 'bin/python3')
+    prefix = output.decode('UTF-8').strip()
 
-    valid = process.returncode == 0 and os.path.isfile(path)
-    return path if valid else python
+    # determine absolute binary path
+    if platform.system() == 'Windows':
+        executable = 'python.exe'
+    else:
+        executable = 'bin/python3'
+    path = os.path.join(prefix, executable)
+
+    # process fails, implies *not* in active virtualenv
+    if not process.returncode == 0:
+        return python
+
+    # the executable path must exist
+    assert os.path.isfile(path), "Expected '%s' to exist." % path
+    return path
+
+
+def use_builtin_venv(venv):
+    """
+    Determine if the builtin venv module should be used to create the testenv's
+    virtual environment. The venv module was added in python 3.3, although some
+    options are not supported until 3.4 and later.
+    """
+    version = venv.envconfig.python_info.version_info
+    return version is not None and version >= (3, 3)
 
 
 @hookimpl
 def tox_testenv_create(venv, action):
     # Bypass hook when venv is not available for the target python version
-    version = venv.envconfig.python_info.version_info
-    if version is not None and version < (3, 3):
+    if not use_builtin_venv(venv):
         return
 
     config_interpreter = venv.getsupportedinterpreter()
