@@ -16,7 +16,7 @@ setup(
     author_email='rpkilby@ncsu.edu',
     url='https://github.com/tox-dev/tox-venv',
     license='BSD',
-    version='0.1.0',
+    version='0.2.0',
     package_dir={'': 'src'},
     packages=find_packages('src'),
     entry_points={'tox': ['venv = tox_venv.hooks']},
