@@ -20,6 +20,8 @@ pytest_plugins = "pytester"
 from tox.session import Session  # noqa #E402 module level import not at top of file
 from tox.config import parseconfig  # noqa #E402 module level import not at top of file
 
+from tox_venv.hooks import use_builtin_venv  # noqa #E402 module level import not at top of file
+
 
 def test_report_protocol(newconfig):
     config = newconfig([], """
@@ -643,25 +645,35 @@ def _alwayscopy_not_supported():
 
 
 @pytest.mark.skipif(_alwayscopy_not_supported(), reason="Platform doesnt support alwayscopy")
-def test_alwayscopy(initproj, cmd):
+def test_alwayscopy(initproj, cmd, mocksession):
     initproj("example123", filedefs={'tox.ini': """
             [testenv]
             commands={envpython} --version
             alwayscopy=True
     """})
+    venv = mocksession.getenv('python')
     result = cmd("-vv")
     assert not result.ret
-    assert "virtualenv --always-copy" in result.out
+
+    if use_builtin_venv(venv):
+        assert "venv --copies" in result.out
+    else:
+        assert "virtualenv --always-copy" in result.out
 
 
-def test_alwayscopy_default(initproj, cmd):
+def test_alwayscopy_default(initproj, cmd, mocksession):
     initproj("example123", filedefs={'tox.ini': """
             [testenv]
             commands={envpython} --version
     """})
+    venv = mocksession.getenv('python')
     result = cmd("-vv")
     assert not result.ret
-    assert "virtualenv --always-copy" not in result.out
+
+    if use_builtin_venv(venv):
+        assert "venv --copies" not in result.out
+    else:
+        assert "virtualenv --always-copy" not in result.out
 
 
 def test_empty_activity_ignored(initproj, cmd):

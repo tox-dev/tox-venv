@@ -10,10 +10,10 @@ from tox.hookspecs import hookimpl
 from tox.interpreters import NoInterpreterInfo
 from tox.venv import CreationConfig
 from tox.venv import getdigest
-from tox.venv import tox_testenv_create
 from tox.venv import tox_testenv_install_deps
 from tox.venv import VirtualEnv
 
+from tox_venv.hooks import use_builtin_venv
 
 # def test_global_virtualenv(capfd):
 #    v = VirtualEnv()
@@ -22,6 +22,10 @@ from tox.venv import VirtualEnv
 #    assert not out
 #    assert not err
 #
+
+
+def tox_testenv_create(action, venv):
+    return venv.hook.tox_testenv_create(action=action, venv=venv)
 
 
 def test_getdigest(tmpdir):
@@ -65,10 +69,16 @@ def test_create(monkeypatch, mocksession, newconfig):
     pcalls = mocksession._pcalls
     assert len(pcalls) >= 1
     args = pcalls[0].args
-    assert "virtualenv" == str(args[2])
+    module = 'venv' if use_builtin_venv(venv) else 'virtualenv'
+    assert module == str(args[2])
     if sys.platform != "win32":
+        executable = sys.executable
+        if use_builtin_venv(venv) and hasattr(sys, 'real_prefix'):
+            # workaround virtualenv prefixing issue w/ venv on python3
+            _, executable = executable.rsplit('bin/', 1)
+            executable = os.path.join(sys.real_prefix, 'bin/', executable)
         # realpath is needed for stuff like the debian symlinks
-        assert py.path.local(sys.executable).realpath() == py.path.local(args[0]).realpath()
+        assert py.path.local(executable).realpath() == py.path.local(args[0]).realpath()
         # assert Envconfig.toxworkdir in args
         assert venv.getcommandpath("easy_install", cwd=py.path.local())
     interp = venv._getliveconfig().python
@@ -400,7 +410,7 @@ def test_install_python3(tmpdir, newmocksession):
     pcalls = mocksession._pcalls
     assert len(pcalls) == 1
     args = pcalls[0].args
-    assert str(args[2]) == 'virtualenv'
+    assert str(args[2]) == 'venv'
     pcalls[:] = []
     action = mocksession.newaction(venv, "hello")
     venv._install(["hello"], action=action)
@@ -489,7 +499,8 @@ class TestCreationConfig:
         assert venv.path_config.check()
         assert mocksession._pcalls
         args1 = map(str, mocksession._pcalls[0].args)
-        assert 'virtualenv' in " ".join(args1)
+        module = 'venv' if use_builtin_venv(venv) else 'virtualenv'
+        assert module in " ".join(args1)
         mocksession.report.expect("*", "*create*")
         # modify config and check that recreation happens
         mocksession._clearmocks()
