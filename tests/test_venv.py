@@ -15,6 +15,14 @@ from tox.venv import VirtualEnv
 
 from tox_venv.hooks import use_builtin_venv
 
+# def test_global_virtualenv(capfd):
+#    v = VirtualEnv()
+#    assert v.list()
+#    out, err = capfd.readouterr()
+#    assert not out
+#    assert not err
+#
+
 
 def tox_testenv_create(action, venv):
     return venv.hook.tox_testenv_create(action=action, venv=venv)
@@ -537,7 +545,7 @@ class TestCreationConfig:
 
 class TestVenvTest:
 
-    def test_envbinddir_path(self, newmocksession, monkeypatch):
+    def test_envbindir_path(self, newmocksession, monkeypatch):
         monkeypatch.setenv("PIP_RESPECT_VIRTUALENV", "1")
         mocksession = newmocksession([], """
             [testenv:python]
@@ -548,7 +556,7 @@ class TestVenvTest:
         monkeypatch.setenv("PATH", "xyz")
         sysfind_calls = []
         monkeypatch.setattr("py.path.local.sysfind", classmethod(
-                            lambda *args, **kwargs: sysfind_calls.append(kwargs) or 0 / 0))
+            lambda *args, **kwargs: sysfind_calls.append(kwargs) or 0 / 0))
 
         with pytest.raises(ZeroDivisionError):
             venv._install(list('123'), action=action)
@@ -562,7 +570,8 @@ class TestVenvTest:
         monkeypatch.setenv("PIP_RESPECT_VIRTUALENV", "1")
         monkeypatch.setenv("PIP_REQUIRE_VIRTUALENV", "1")
         monkeypatch.setenv("__PYVENV_LAUNCHER__", "1")
-        pytest.raises(ZeroDivisionError, "venv.run_install_command(['qwe'], action=action)")
+        with pytest.raises(ZeroDivisionError):
+            venv.run_install_command(['qwe'], action=action)
         assert 'PIP_RESPECT_VIRTUALENV' not in os.environ
         assert 'PIP_REQUIRE_VIRTUALENV' not in os.environ
         assert '__PYVENV_LAUNCHER__' not in os.environ
@@ -636,7 +645,7 @@ def test_env_variables_added_to_pcall(tmpdir, mocksession, newconfig, monkeypatc
     assert pcalls[0].env["YY"] == "456"
     assert "YY" not in pcalls[1].env
 
-    assert set(["ENV_VAR", "VIRTUAL_ENV", "PYTHONHASHSEED", "X123", "PATH"])\
+    assert {"ENV_VAR", "VIRTUAL_ENV", "PYTHONHASHSEED", "X123", "PATH"} \
         .issubset(pcalls[1].env)
 
     # setenv does not trigger PYTHONPATH warnings
@@ -703,7 +712,7 @@ def test_run_custom_install_command(newmocksession):
     assert pcalls[0].args[1:] == ['whatever']
 
 
-def test_command_relative_issue26(newmocksession, tmpdir, monkeypatch):
+def test_command_relative_issue36(newmocksession, tmpdir, monkeypatch):
     mocksession = newmocksession([], """
         [testenv]
     """)
