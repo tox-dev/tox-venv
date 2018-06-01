@@ -23,7 +23,7 @@ def real_python3(python):
     If `real_prefix` is not present, the environment was not created with
     virtualenv, and the python executable is safe to use.
     """
-    args = [str(python), '-c', 'import sys; print(sys.real_prefix)']
+    args = [python, '-c', 'import sys; print(sys.real_prefix)']
 
     # get python prefix
     try:
@@ -60,7 +60,7 @@ def tox_testenv_create(venv, action):
     if not use_builtin_venv(venv):
         return
 
-    config_interpreter = venv.getsupportedinterpreter()
+    config_interpreter = str(venv.getsupportedinterpreter())
     real_executable = real_python3(config_interpreter)
 
     args = [real_executable, '-m', 'venv']
