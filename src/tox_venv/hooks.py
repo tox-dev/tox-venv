@@ -27,9 +27,12 @@ def real_python3(python):
     args = [str(python), '-c', 'import sys; print(sys.real_prefix)']
 
     # get python prefix
-    process = subprocess.Popen(args, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
-    output, _ = process.communicate()
-    prefix = output.decode('UTF-8').strip()
+    try:
+        output = subprocess.check_output(args)
+        prefix = output.decode('UTF-8').strip()
+    except subprocess.CalledProcessError:
+        # process fails, implies *not* in active virtualenv
+        return python
 
     # determine absolute binary path
     if platform.system() == 'Windows':  # pragma: no cover
@@ -37,10 +40,6 @@ def real_python3(python):
     else:
         executable = 'bin/python3'
     path = os.path.join(prefix, executable)
-
-    # process fails, implies *not* in active virtualenv
-    if not process.returncode == 0:
-        return python
 
     # the executable path must exist
     assert os.path.isfile(path), "Expected '%s' to exist." % path
