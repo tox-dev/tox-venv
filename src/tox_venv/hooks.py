@@ -1,5 +1,4 @@
 import os
-import platform
 import subprocess
 
 import tox
@@ -35,11 +34,10 @@ def real_python3(python):
         return python
 
     # determine absolute binary path
-    if platform.system() == 'Windows':  # pragma: no cover
-        executable = 'python.exe'
+    if os.name == 'nt':  # pragma: no cover
+        path = os.path.join(prefix, os.path.basename(python))
     else:
-        executable = 'bin/python3'
-    path = os.path.join(prefix, executable)
+        path = os.path.join(prefix, 'bin', os.path.basename(python))
 
     # the executable path must exist
     assert os.path.isfile(path), "Expected '%s' to exist." % path
