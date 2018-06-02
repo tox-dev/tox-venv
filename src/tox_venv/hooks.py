@@ -1,11 +1,10 @@
 import os
-import platform
 import subprocess
 
 import tox
 
 
-def real_python3(python):
+def real_python3(python, version_dict):
     """
     Determine the path of the real python executable, which is then used for
     venv creation. This is necessary, because an active virtualenv environment
@@ -14,8 +13,8 @@ def real_python3(python):
 
     The provided `python` path may be either:
     - A real python executable
-    - A virtualized python executable (with venv)
-    - A virtualized python executable (with virtualenv)
+    - A virtual python executable (with venv)
+    - A virtual python executable (with virtualenv)
 
     If the virtual environment was created with virtualenv, the `sys` module
     will have a `real_prefix` attribute, which points to the directory where
@@ -23,27 +22,49 @@ def real_python3(python):
 
     If `real_prefix` is not present, the environment was not created with
     virtualenv, and the python executable is safe to use.
+
+    The `version_dict` is used for attempting to derive the real executable
+    path. This is necessary when the name of the virtual python executable
+    does not exist in the Python installation's directory. For example, if
+    the `basepython` is explicitly set to `python`, tox will use this name
+    instead of attempting `pythonX.Y`. In many cases, Python 3 installations
+    do not contain an executable named `python`, so we attempt to derive this
+    from the version info. e.g., `python3.6.5`, `python3.6`, then `python3`.
     """
-    args = [str(python), '-c', 'import sys; print(sys.real_prefix)']
+    args = [python, '-c', 'import sys; print(sys.real_prefix)']
 
     # get python prefix
-    process = subprocess.Popen(args, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
-    output, _ = process.communicate()
-    prefix = output.decode('UTF-8').strip()
-
-    # determine absolute binary path
-    if platform.system() == 'Windows':  # pragma: no cover
-        executable = 'python.exe'
-    else:
-        executable = 'bin/python3'
-    path = os.path.join(prefix, executable)
-
-    # process fails, implies *not* in active virtualenv
-    if not process.returncode == 0:
+    try:
+        output = subprocess.check_output(args)
+        prefix = output.decode('UTF-8').strip()
+    except subprocess.CalledProcessError:
+        # process fails, implies *not* in active virtualenv
         return python
 
+    # determine absolute binary path
+    if os.name == 'nt':  # pragma: no cover
+        paths = [os.path.join(prefix, os.path.basename(python))]
+    else:
+        paths = [os.path.join(prefix, 'bin', python) for python in [
+            os.path.basename(python),
+            'python%(major)d.%(minor)d.%(micro)d' % version_dict,
+            'python%(major)d.%(minor)d' % version_dict,
+            'python%(major)d' % version_dict,
+            'python',
+        ]]
+
+    for path in paths:
+        if os.path.isfile(path):
+            break
+    else:
+        path = None
+
     # the executable path must exist
-    assert os.path.isfile(path), "Expected '%s' to exist." % path
+    assert path, '\n- '.join(['Could not find interpreter. Attempted:'] + paths)
+    v1 = subprocess.check_output([python, '--version'])
+    v2 = subprocess.check_output([path, '--version'])
+    assert v1 == v2, 'Expected versions to match (%s != %s).' % (v1, v2)
+
     return path
 
 
@@ -63,8 +84,11 @@ def tox_testenv_create(venv, action):
     if not use_builtin_venv(venv):
         return
 
-    config_interpreter = venv.getsupportedinterpreter()
-    real_executable = real_python3(config_interpreter)
+    v = venv.envconfig.python_info.version_info
+    version_dict = {'major': v[0], 'minor': v[1], 'micro': v[2]}
+
+    config_interpreter = str(venv.getsupportedinterpreter())
+    real_executable = real_python3(config_interpreter, version_dict)
 
     args = [real_executable, '-m', 'venv']
     if venv.envconfig.sitepackages:
