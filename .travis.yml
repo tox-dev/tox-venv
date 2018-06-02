@@ -21,8 +21,10 @@ matrix:
 
     - python: 3.6
       env: TOXENV="isort,lint,coverage"
+      script: tox
       after_success:
         - pip install codecov && codecov
+        - coverage report
 
 before_install:
   - if [[ "$TRAVIS_OS_NAME" == "osx" ]]; then
