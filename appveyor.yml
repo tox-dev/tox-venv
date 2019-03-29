@@ -1,5 +1,9 @@
 build: false  # Not a C# project
 
+branches:
+  only:
+    - master
+
 environment:
   matrix:
     - TOXENV: py34
