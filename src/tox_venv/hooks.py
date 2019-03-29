@@ -2,6 +2,7 @@ import os
 import subprocess
 
 import tox
+from tox.venv import cleanup_for_venv
 
 
 def real_python3(python, version_dict):
@@ -96,7 +97,9 @@ def tox_testenv_create(venv, action):
     if venv.envconfig.alwayscopy:
         args.append('--copies')
 
-    venv.session.make_emptydir(venv.path)
+    # Handles making the empty dir for the `venv.path`.
+    cleanup_for_venv(venv)
+
     basepath = venv.path.dirpath()
     basepath.ensure(dir=1)
     args.append(venv.path.basename)
