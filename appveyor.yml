@@ -1,5 +1,9 @@
 build: false  # Not a C# project
 
+branches:
+  only:
+    - master
+
 environment:
   matrix:
     - TOXENV: py34
@@ -12,7 +16,7 @@ matrix:
 
 install:
   - C:\Python36\python -m pip install -U six setuptools wheel
-  - C:\Python36\python -m pip install -U tox tox-travis
+  - C:\Python36\python -m pip install -U tox
   - C:\Python36\python setup.py bdist_wheel
 
 test_script:
