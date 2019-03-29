@@ -20,7 +20,7 @@ setup(
     package_dir={'': 'src'},
     packages=find_packages('src'),
     entry_points={'tox': ['venv = tox_venv.hooks']},
-    install_requires=['tox>=2.0'],
+    install_requires=['tox>=3.8.1'],
     classifiers=[
         'Development Status :: 3 - Alpha',
         'Framework :: tox',
