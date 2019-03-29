@@ -7,24 +7,24 @@ branches:
 
 language: python
 python:
-  - 2.7
-  - 3.4
-  - 3.5
-  - 3.6
-  - 3.7
-  - pypy
+  - "2.7"
+  - "3.4"
+  - "3.5"
+  - "3.6"
+  - "3.7"
+  - "pypy3.5"
 
 matrix:
   fast_finish: true
   allow_failures:
-    - python: pypy
+    - python: "pypy3.5"
 
   include:
     - os: osx
       language: generic
       env: TOXENV=py36
 
-    - python: 3.7
+    - python: "3.7"
       env: TOXENV="isort,lint,coverage"
       script: tox
       after_success:
