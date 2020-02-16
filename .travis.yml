@@ -1,4 +1,4 @@
-sudo: false
+os: linux
 dist: xenial
 
 branches:
@@ -8,13 +8,13 @@ branches:
 language: python
 python:
   - "2.7"
-  - "3.4"
   - "3.5"
   - "3.6"
   - "3.7"
+  - "3.8"
   - "pypy3.5"
 
-matrix:
+jobs:
   fast_finish: true
   allow_failures:
     - python: "pypy3.5"
@@ -22,9 +22,9 @@ matrix:
   include:
     - os: osx
       language: generic
-      env: TOXENV=py36
+      env: TOXENV=py37
 
-    - python: "3.7"
+    - python: "3.8"
       env: TOXENV="isort,lint,coverage"
       script: tox
       after_success:
@@ -35,8 +35,10 @@ matrix:
 # We don't need to get the latest version of Python 3 on macOS. While it
 # would be nice, the 5-10 minutes it takes to update Homebrew and upgrade
 # the various dependent packages, means that it's is not worth it.
+# Note that we also print the python version in case of macOS updates
 before_install:
   - if [[ "$TRAVIS_OS_NAME" == "osx" ]]; then
+      python3 --version;
       python3 -m venv venv;
       source venv/bin/activate;
     fi
