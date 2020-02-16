@@ -35,10 +35,10 @@ jobs:
 # We don't need to get the latest version of Python 3 on macOS. While it
 # would be nice, the 5-10 minutes it takes to update Homebrew and upgrade
 # the various dependent packages, means that it's is not worth it.
+# Note that we also print the python version in case of macOS updates
 before_install:
   - if [[ "$TRAVIS_OS_NAME" == "osx" ]]; then
-      # print version in case of update
-      python3 --version
+      python3 --version;
       python3 -m venv venv;
       source venv/bin/activate;
     fi
