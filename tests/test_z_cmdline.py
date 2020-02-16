@@ -6,6 +6,7 @@ import subprocess
 import sys
 import tempfile
 
+import pathlib2
 import py
 import pytest
 
@@ -13,8 +14,6 @@ import tox
 from tox.config import parseconfig
 from tox.reporter import Verbosity
 from tox.session import Session
-
-from tox_venv.hooks import use_builtin_venv
 
 pytest_plugins = "pytester"
 
@@ -117,6 +116,32 @@ def test_envdir_equals_toxini_errors_out(cmd, initproj):
     result.assert_fail()
 
 
+def test_envdir_would_delete_some_directory(cmd, initproj):
+    projdir = initproj(
+        "example-123",
+        filedefs={
+            "tox.ini": """\
+                [tox]
+
+                [testenv:venv]
+                envdir=example
+                commands=
+            """
+        },
+    )
+
+    result = cmd("-e", "venv")
+    assert projdir.join("example/__init__.py").exists()
+    result.assert_fail()
+    assert "cowardly refusing to delete `envdir`" in result.out
+
+
+def test_recreate(cmd, initproj):
+    initproj("example-123", filedefs={"tox.ini": ""})
+    cmd("-e", "py", "--notest").assert_success()
+    cmd("-r", "-e", "py", "--notest").assert_success()
+
+
 def test_run_custom_install_command_error(cmd, initproj):
     initproj(
         "interp123-0.5",
@@ -140,24 +165,29 @@ def test_unknown_interpreter_and_env(cmd, initproj):
         "interp123-0.5",
         filedefs={
             "tests": {"test_hello.py": "def test_hello(): pass"},
-            "tox.ini": """
-            [testenv:python]
-            basepython=xyz_unknown_interpreter
-            [testenv]
-            changedir=tests
-            skip_install = true
-        """,
+            "tox.ini": """\
+                [testenv:python]
+                basepython=xyz_unknown_interpreter
+                [testenv]
+                changedir=tests
+                skip_install = true
+            """,
         },
     )
     result = cmd()
     result.assert_fail()
-    assert any(
-        "ERROR: InterpreterNotFound: xyz_unknown_interpreter" == l for l in result.outlines
-    ), result.outlines
+    assert "ERROR: InterpreterNotFound: xyz_unknown_interpreter" in result.outlines
 
     result = cmd("-exyz")
     result.assert_fail()
     assert result.out == "ERROR: unknown environment 'xyz'\n"
+
+
+def test_unknown_interpreter_factor(cmd, initproj):
+    initproj("py21", filedefs={"tox.ini": "[testenv]\nskip_install=true"})
+    result = cmd("-e", "py21")
+    result.assert_fail()
+    assert "ERROR: InterpreterNotFound: python2.1" in result.outlines
 
 
 def test_unknown_interpreter(cmd, initproj):
@@ -382,7 +412,31 @@ def test_no_setup_py_exits(cmd, initproj):
     result = cmd()
     result.assert_fail()
     assert any(
-        re.match(r".*ERROR.*No setup.py file found.*", l) for l in result.outlines
+        re.match(r".*ERROR.*No pyproject.toml or setup.py file found.*", l)
+        for l in result.outlines
+    ), result.outlines
+
+
+def test_no_setup_py_exits_but_pyproject_toml_does(cmd, initproj):
+    initproj(
+        "pkg123-0.7",
+        filedefs={
+            "tox.ini": """
+            [testenv]
+            commands=python -c "2 + 2"
+        """
+        },
+    )
+    os.remove("setup.py")
+    pathlib2.Path("pyproject.toml").touch()
+    result = cmd()
+    result.assert_fail()
+    assert any(
+        re.match(r".*ERROR.*pyproject.toml file found.*", l) for l in result.outlines
+    ), result.outlines
+    assert any(
+        re.match(r".*To use a PEP 517 build-backend you are required to*", l)
+        for l in result.outlines
     ), result.outlines
 
 
@@ -469,8 +523,8 @@ def test_result_json(cmd, initproj, example123):
             deps = setuptools
             commands_pre = python -c 'print("START")'
             commands = python -c 'print("OK")'
-                       - python -c 'raise SystemExit(1)'
-                       python -c 'raise SystemExit(2)'
+                       - python -c 'print("1"); raise SystemExit(1)'
+                       python -c 'print("1"); raise SystemExit(2)'
                        python -c 'print("SHOULD NOT HAPPEN")'
             commands_post = python -c 'print("END")'
         """
@@ -502,7 +556,7 @@ def test_result_json(cmd, initproj, example123):
         assert isinstance(pyinfo["version_info"], list)
         assert pyinfo["version"]
         assert pyinfo["executable"]
-    assert "wrote json report at: {}".format(json_path) == result.outlines[-1]
+    assert "write json report at: {}".format(json_path) == result.outlines[-1]
 
 
 def test_developz(initproj, cmd):
@@ -654,7 +708,28 @@ def test_warning_emitted(cmd, initproj):
     assert "I am a warning" in result.err
 
 
-def test_alwayscopy(initproj, cmd, mocksession):
+def _alwayscopy_not_supported():
+    # This is due to virtualenv bugs with alwayscopy in some platforms
+    # see: https://github.com/pypa/virtualenv/issues/565
+    supported = True
+    tmpdir = tempfile.mkdtemp()
+    try:
+        with open(os.devnull) as fp:
+            subprocess.check_call(
+                [sys.executable, "-m", "virtualenv", "--always-copy", tmpdir], stdout=fp, stderr=fp
+            )
+    except subprocess.CalledProcessError:
+        supported = False
+    finally:
+        shutil.rmtree(tmpdir)
+    return not supported
+
+
+alwayscopy_not_supported = _alwayscopy_not_supported()
+
+
+@pytest.mark.skipif(alwayscopy_not_supported, reason="Platform doesnt support alwayscopy")
+def test_alwayscopy(initproj, cmd):
     initproj(
         "example123",
         filedefs={
@@ -665,16 +740,12 @@ def test_alwayscopy(initproj, cmd, mocksession):
     """
         },
     )
-    venv = mocksession.getvenv("python")
     result = cmd("-vv")
     result.assert_success()
-    if use_builtin_venv(venv):
-        assert "venv --copies" in result.out
-    else:
-        assert "virtualenv --always-copy" in result.out
+    assert "virtualenv --always-copy" in result.out
 
 
-def test_alwayscopy_default(initproj, cmd, mocksession):
+def test_alwayscopy_default(initproj, cmd):
     initproj(
         "example123",
         filedefs={
@@ -684,13 +755,9 @@ def test_alwayscopy_default(initproj, cmd, mocksession):
     """
         },
     )
-    venv = mocksession.getvenv("python")
     result = cmd("-vv")
     result.assert_success()
-    if use_builtin_venv(venv):
-        assert "venv --copies" not in result.out
-    else:
-        assert "virtualenv --always-copy" not in result.out
+    assert "virtualenv --always-copy" not in result.out
 
 
 @pytest.mark.skipif("sys.platform == 'win32'", reason="no echo on Windows")
@@ -719,6 +786,7 @@ def test_empty_activity_shown_verbose(initproj, cmd):
             [testenv]
             list_dependencies_command=echo
             commands={envpython} --version
+            whitelist_externals = echo
     """
         },
     )
@@ -746,11 +814,13 @@ def test_notest(initproj, cmd):
     initproj(
         "example123",
         filedefs={
-            "tox.ini": """
-        # content of: tox.ini
-        [testenv:py26]
-        basepython=python
-    """
+            "tox.ini": """\
+            # content of: tox.ini
+            [testenv:py26]
+            basepython={}
+            """.format(
+                sys.executable
+            )
         },
     )
     result = cmd("-v", "--notest")
@@ -777,6 +847,73 @@ def test_notest_setup_py_error(initproj, cmd):
     assert re.search("ERROR:.*InvocationError", result.out)
 
 
+def test_devenv(initproj, cmd):
+    initproj(
+        "example123",
+        filedefs={
+            "setup.py": """\
+                from setuptools import setup
+                setup(name='x')
+            """,
+            "tox.ini": """\
+            [tox]
+            # envlist is ignored for --devenv
+            envlist = foo,bar,baz
+
+            [testenv]
+            # --devenv implies --notest
+            commands = python -c "exit(1)"
+            """,
+        },
+    )
+    result = cmd("--devenv", "venv")
+    result.assert_success()
+    # `--devenv` defaults to the `py` environment and a develop install
+    assert "py develop-inst:" in result.out
+    assert re.search("py create:.*venv", result.out)
+
+
+def test_devenv_does_not_allow_multiple_environments(initproj, cmd):
+    initproj(
+        "example123",
+        filedefs={
+            "setup.py": """\
+                from setuptools import setup
+                setup(name='x')
+            """,
+            "tox.ini": """\
+            [tox]
+            envlist=foo,bar,baz
+            """,
+        },
+    )
+
+    result = cmd("--devenv", "venv", "-e", "foo,bar")
+    result.assert_fail()
+    assert result.err == "ERROR: --devenv requires only a single -e\n"
+
+
+def test_devenv_does_not_delete_project(initproj, cmd):
+    initproj(
+        "example123",
+        filedefs={
+            "setup.py": """\
+                from setuptools import setup
+                setup(name='x')
+            """,
+            "tox.ini": """\
+            [tox]
+            envlist=foo,bar,baz
+            """,
+        },
+    )
+
+    result = cmd("--devenv", "")
+    result.assert_fail()
+    assert "would delete project" in result.out
+    assert "ERROR: ConfigError: envdir must not equal toxinidir" in result.out
+
+
 def test_PYC(initproj, cmd, monkeypatch):
     initproj("example123", filedefs={"tox.ini": ""})
     monkeypatch.setenv("PYTHONDOWNWRITEBYTECODE", "1")
@@ -789,6 +926,25 @@ def test_env_VIRTUALENV_PYTHON(initproj, cmd, monkeypatch):
     initproj("example123", filedefs={"tox.ini": ""})
     monkeypatch.setenv("VIRTUALENV_PYTHON", "/FOO")
     result = cmd("-v", "--notest")
+    result.assert_success()
+    assert "create" in result.out
+
+
+def test_setup_prints_non_ascii(initproj, cmd):
+    initproj(
+        "example123",
+        filedefs={
+            "setup.py": """\
+import sys
+getattr(sys.stdout, 'buffer', sys.stdout).write(b'\\xe2\\x98\\x83\\n')
+
+import setuptools
+setuptools.setup(name='example123')
+""",
+            "tox.ini": "",
+        },
+    )
+    result = cmd("--notest")
     result.assert_success()
     assert "create" in result.out
 
@@ -830,12 +986,6 @@ def test_envsitepackagesdir_skip_missing_issue280(cmd, initproj):
 def test_verbosity(cmd, initproj, verbosity):
     initproj(
         "pkgX-0.0.5",
-        # Note: This is related to https://github.com/tox-dev/tox#935
-        # For some reason, the .egg-info/ directory is interacting with the
-        # PYTHONPATH on Appveyor, causing the package to *not* be installed
-        # since pip already thinks it is. By setting the `src_root`, we can
-        # avoid the issue.
-        src_root="src",
         filedefs={
             "tox.ini": """
         [testenv]
