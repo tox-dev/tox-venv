@@ -12,9 +12,14 @@ from tox.venv import (
     VirtualEnv,
     getdigest,
     prepend_shebang_interpreter,
-    tox_testenv_create,
     tox_testenv_install_deps,
 )
+
+from tox_venv.hooks import use_builtin_venv
+
+
+def tox_testenv_create(action, venv):
+    return venv.hook.tox_testenv_create(action=action, venv=venv)
 
 
 def test_getdigest(tmpdir):
@@ -71,10 +76,16 @@ def test_create(mocksession, newconfig):
     pcalls = mocksession._pcalls
     assert len(pcalls) >= 1
     args = pcalls[0].args
-    assert "virtualenv" == str(args[2])
+    module = "venv" if use_builtin_venv(venv) else "virtualenv"
+    assert module == str(args[2])
     if not tox.INFO.IS_WIN:
+        executable = sys.executable
+        if use_builtin_venv(venv) and hasattr(sys, "real_prefix"):
+            # workaround virtualenv prefixing issue w/ venv on python3
+            executable = "python{}.{}".format(*sys.version_info)
+            executable = os.path.join(sys.real_prefix, "bin", executable)
         # realpath is needed for stuff like the debian symlinks
-        our_sys_path = py.path.local(sys.executable).realpath()
+        our_sys_path = py.path.local(executable).realpath()
         assert our_sys_path == py.path.local(args[0]).realpath()
         # assert Envconfig.toxworkdir in args
         assert venv.getcommandpath("easy_install", cwd=py.path.local())
@@ -464,7 +475,7 @@ def test_install_python3(newmocksession):
         pcalls = mocksession._pcalls
         assert len(pcalls) == 1
         args = pcalls[0].args
-        assert str(args[2]) == "virtualenv"
+        assert str(args[2]) == "venv"
         pcalls[:] = []
     with mocksession.newaction(venv.name, "hello") as action:
         venv._install(["hello"], action=action)
@@ -565,7 +576,8 @@ class TestCreationConfig:
         assert venv.path_config.check()
         assert mocksession._pcalls
         args1 = map(str, mocksession._pcalls[0].args)
-        assert "virtualenv" in " ".join(args1)
+        module = "venv" if use_builtin_venv(venv) else "virtualenv"
+        assert module in " ".join(args1)
         mocksession.report.expect("*", "*create*")
         # modify config and check that recreation happens
         mocksession._clearmocks()
@@ -1072,7 +1084,8 @@ def test_create_download(mocksession, newconfig, download):
     pcalls = mocksession._pcalls
     assert len(pcalls) >= 1
     args = pcalls[0].args
-    if download is True:
+    # builtin venv does not support --no-download
+    if download or use_builtin_venv(venv):
         assert "--no-download" not in map(str, args)
     else:
         assert "--no-download" in map(str, args)
