@@ -103,6 +103,13 @@ def tox_testenv_create(venv, action):
     basepath = venv.path.dirpath()
     basepath.ensure(dir=1)
     args.append(venv.path.basename)
-    venv._pcall(args, venv=False, action=action, cwd=basepath)
+
+    if not os.environ.get('_TOX_SKIP_ENV_CREATION_TEST', False) == '1':
+        try:
+            venv._pcall(args, venv=False, action=action, cwd=basepath)
+        except KeyboardInterrupt:
+            venv.status = 'keyboardinterrupt'
+            raise
+
     # Return non-None to indicate the plugin has completed
     return True
