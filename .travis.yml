@@ -12,6 +12,7 @@ python:
   - "3.5"
   - "3.6"
   - "3.7"
+  - "3.8"
   - "pypy3.5"
 
 matrix:
@@ -24,7 +25,7 @@ matrix:
       language: generic
       env: TOXENV=py36
 
-    - python: "3.7"
+    - python: "3.8"
       env: TOXENV="isort,lint,coverage"
       script: tox
       after_success:
